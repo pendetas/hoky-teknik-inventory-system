@@ -1,14 +1,28 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useInventory } from '../store/InventoryContext';
 import { Product } from '../lib/types';
-import { Plus, Edit2, Trash2, Image as ImageIcon, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, ChevronDown, X } from 'lucide-react';
 import { formatCurrency, fileToBase64 } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+
+const productFilterOptions = [
+  'matrix',
+  'goodpro',
+  'atmoz',
+  'kishon',
+  'tiger',
+  'proquip',
+  'maestro',
+  'sumura',
+  'general',
+] as const;
 
 export const Products = () => {
   const { products, addProduct, updateProduct, deleteProduct } = useInventory();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [productGroupFilter, setProductGroupFilter] = useState<'All' | typeof productFilterOptions[number]>('All');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -77,20 +91,101 @@ export const Products = () => {
     }
   };
 
+  const filteredProducts = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return products.filter((product) => {
+      const normalizedName = product.name.toLowerCase();
+      const matchesName = !normalizedSearch || normalizedName.includes(normalizedSearch);
+      const matchesGroup = productGroupFilter === 'All' || normalizedName.includes(productGroupFilter);
+
+      return matchesName && matchesGroup;
+    });
+  }, [productGroupFilter, products, searchTerm]);
+
+  const hasActiveFilter = searchTerm || productGroupFilter !== 'All';
+
+  const formatLastUpdate = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+
+    return date.toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+    });
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center bg-stone-50 p-5 border border-gray-200 mb-6 shadow-sm dark:bg-[#151619] dark:border-[#2A2D35]">
-        <h3 className="text-sm font-bold uppercase italic text-gray-900 dark:text-[#E0E2E6]">03 / Katalog Gudang</h3>
-        <button 
-          onClick={() => handleOpenModal()}
-          className="bg-[#F27D26] hover:brightness-110 text-black px-4 py-2 font-black text-[10px] uppercase tracking-tighter flex items-center gap-2 transition-all"
-        >
-          <Plus size={16} /> Tambah Produk Baru
-        </button>
+      <div className="bg-stone-50 border border-gray-200 p-5 shadow-sm dark:bg-[#151619] dark:border-[#2A2D35]">
+        <div className="space-y-5">
+          <div className="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-[#2A2D35] md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-sm font-bold uppercase italic text-gray-900 dark:text-[#E0E2E6]">03 / Katalog Gudang</h3>
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">
+                {filteredProducts.length} dari {products.length} produk ditampilkan
+              </p>
+            </div>
+            <button 
+              onClick={() => handleOpenModal()}
+              className="bg-[#F27D26] hover:brightness-110 text-black px-4 py-3 font-black text-[10px] uppercase tracking-wide flex items-center justify-center gap-2 transition-all"
+            >
+              <Plus size={16} /> Tambah Produk Baru
+            </button>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[1.4fr_0.9fr_auto]">
+            <label className="block">
+              <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Cari Nama Produk</span>
+              <div className="mt-1 flex h-10 items-center gap-2 border-[0.5px] border-gray-300 bg-white px-3 transition-colors focus-within:border-[#F97316] dark:border-[#333] dark:bg-[#111]">
+                <Search size={15} className="text-gray-500 dark:text-[#A0A0A0]" />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Cari berdasarkan nama..."
+                  className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-[#A0A0A0] dark:placeholder:text-[#555]"
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Jenis Produk</span>
+              <div className="relative mt-1">
+                <select
+                  value={productGroupFilter}
+                  onChange={(event) => setProductGroupFilter(event.target.value as 'All' | typeof productFilterOptions[number])}
+                  className="h-10 w-full appearance-none border-[0.5px] border-gray-300 bg-white px-3 pr-9 text-sm text-gray-900 outline-none transition-colors focus:border-[#F97316] dark:border-[#333] dark:bg-[#111] dark:text-[#A0A0A0]"
+                >
+                  <option value="All">Semua Produk</option>
+                  {productFilterOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={15} className="pointer-events-none absolute inset-y-0 right-3 my-auto text-gray-500 dark:text-[#A0A0A0]" />
+              </div>
+            </label>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm('');
+                setProductGroupFilter('All');
+              }}
+              disabled={!hasActiveFilter}
+              className="h-10 self-end border-[0.5px] border-[#F97316] bg-transparent px-4 text-[10px] font-black uppercase tracking-tighter text-[#F97316] transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-[rgba(249,115,22,0.08)]"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {products.map(product => (
+        {filteredProducts.map(product => (
           <div key={product.id} className="bg-stone-50 border border-gray-200 overflow-hidden flex flex-col group shadow-sm dark:bg-[#151619] dark:border-[#2A2D35]">
             <div className="aspect-square bg-gray-100 relative items-center justify-center flex overflow-hidden border-b border-gray-200 dark:bg-[#090A0C] dark:border-[#2A2D35]">
               {product.photoUrl ? (
@@ -120,20 +215,28 @@ export const Products = () => {
               </div>
             </div>
             <div className="p-4 flex flex-col flex-1">
-              <h3 className="text-xs font-bold text-gray-950 uppercase tracking-wider line-clamp-2 dark:text-white" title={product.name}>{product.name}</h3>
+              <h3 className="text-sm font-bold leading-snug text-gray-950 line-clamp-2 dark:text-white" title={product.name}>{product.name}</h3>
               <p className="text-gray-500 text-xs mt-1 line-clamp-2 dark:text-[#8E9299]" title={product.description}>{product.description || 'Tidak ada deskripsi'}</p>
-              <div className="mt-auto pt-4 flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest dark:text-[#8E9299]">STOK:</span>
-                <span className={`text-[10px] font-black px-2 py-1 ${product.stock < 5 ? 'bg-[#FF4444] text-white' : 'text-gray-500 dark:text-[#8E9299]'}`}>
+              <div className="mt-auto pt-4">
+                <div className="flex items-end justify-between gap-3 border-t border-gray-200 pt-3 dark:border-[#2A2D35]">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest dark:text-[#8E9299]">Stok</span>
+                  <span className={`font-mono text-2xl font-black leading-none ${product.stock < 5 ? 'text-[#FF4444]' : 'text-gray-950 dark:text-white'}`}>
                   {product.stock}
-                </span>
+                  </span>
+                </div>
+                <div className="mt-3 flex justify-between text-[9px] font-black uppercase tracking-widest text-gray-400 dark:text-[#666]">
+                  <span>Last Update</span>
+                  <span className="font-mono text-gray-600 dark:text-[#A0A0A0]">{formatLastUpdate(product.updatedAt)}</span>
+                </div>
               </div>
             </div>
           </div>
         ))}
-        {products.length === 0 && (
+        {filteredProducts.length === 0 && (
           <div className="col-span-full py-12 p-4 border-2 border-dashed border-gray-300 bg-stone-50 text-center dark:border-[#2A2D35] dark:bg-[#090A0C]">
-            <p className="text-[10px] text-gray-500 leading-relaxed uppercase font-bold tracking-widest dark:text-[#8E9299]">Produk tidak ditemukan. Tambahkan produk pertama Anda.</p>
+            <p className="text-[10px] text-gray-500 leading-relaxed uppercase font-bold tracking-widest dark:text-[#8E9299]">
+              {hasActiveFilter ? 'Tidak ada produk yang cocok dengan filter.' : 'Produk tidak ditemukan. Tambahkan produk pertama Anda.'}
+            </p>
           </div>
         )}
       </div>

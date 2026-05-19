@@ -115,7 +115,6 @@ export const ShopeeReports = () => {
       ['PENGEMBALIAN SHOPEE', 'NILAI'],
       ['Kasus Retur Dibuka', filteredReturns.length],
       ['Total Quantity Retur', returnedQty],
-      ['Retur Menunggu Cek', getReturnCountByStatus('Menunggu Cek', filteredReturns)],
       ['Retur Barang Bagus', getReturnCountByStatus('Barang Bagus', filteredReturns)],
       ['Retur Rusak Menunggu Shopee', getReturnCountByStatus('Barang Rusak - Menunggu Shopee', filteredReturns)],
       ['Retur Rusak Dikompensasi', getReturnCountByStatus('Barang Rusak - Dikompensasi', filteredReturns)],
@@ -133,7 +132,7 @@ export const ShopeeReports = () => {
     ];
 
     const shipmentData = [
-      ['ID Pesanan', 'No. Resi', 'Tanggal', 'Status', 'Metode Pengiriman', 'Metode Pembayaran', 'Produk', 'Total Qty', 'Estimasi Penerimaan', 'Omset Diakui'],
+      ['ID Pesanan', 'No. Resi', 'Tanggal', 'Status', 'Metode Pengiriman', 'Metode Pembayaran', 'Produk', 'Total Qty', 'Estimasi Penerimaan', 'Penerimaan Final', 'Omset Diakui'],
       ...filteredShipments.map((sale) => [
         sale.orderId || '-',
         sale.deliveryId || '-',
@@ -144,6 +143,7 @@ export const ShopeeReports = () => {
         getOrderProducts(sale.items),
         getOrderQty(sale.items),
         sale.price,
+        sale.finalReceiptAmount ?? '-',
         getShopeeReceivableAmount(sale),
       ]),
     ];

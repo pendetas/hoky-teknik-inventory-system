@@ -5,7 +5,6 @@ import { formatCurrency } from '../lib/utils';
 import { ShopeeReturnCase, ShopeeReturnStatus } from '../lib/types';
 
 const returnStatusOptions: ShopeeReturnStatus[] = [
-  'Menunggu Cek',
   'Barang Bagus',
   'Barang Rusak - Menunggu Shopee',
   'Barang Rusak - Dikompensasi',
@@ -176,16 +175,16 @@ export const ShopeeReturns = () => {
               {filteredReturnCases.map((returnCase) => (
                 <tr key={returnCase.id} className="transition-colors hover:bg-gray-100 dark:bg-[#111] dark:hover:bg-[#161616]">
                   <td className="p-4 text-sm font-mono font-bold text-gray-900 dark:text-[#E0E0E0]">{returnCase.order.orderId}</td>
-                  <td className={`p-4 text-sm font-mono ${returnCase.order.deliveryId ? 'font-bold text-gray-900 dark:text-[#E0E0E0]' : 'text-gray-300 dark:text-[#3A3A3A]'}`}>
+                  <td className="p-4 text-sm font-mono font-bold text-gray-900 dark:text-[#E0E0E0]">
                     {returnCase.order.deliveryId || <span>&mdash;</span>}
                   </td>
-                  <td className="p-4 text-sm font-mono text-gray-700 dark:text-[#D0D0D0]">
+                  <td className="p-4 text-sm font-mono text-gray-900 dark:text-[#E0E0E0]">
                     {new Date(returnCase.order.date).toLocaleDateString()}
                   </td>
-                  <td className="p-4 text-sm font-semibold">
+                  <td className="p-4 align-top text-sm font-semibold">
                     <div className="space-y-3">
                       {returnCase.order.items.map((item) => (
-                        <div key={item.id} className="flex items-center gap-3 text-gray-900 dark:text-[#E0E0E0]">
+                        <div key={item.id} className="flex min-h-10 items-center gap-3 text-gray-900 dark:text-[#E0E0E0]">
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden border-[0.5px] border-gray-300 bg-gray-100 text-gray-400 dark:border-[#333] dark:bg-[#0B0B0B] dark:text-[#555]">
                             {getProduct(item.productId)?.photoUrl ? (
                               <img
@@ -202,10 +201,10 @@ export const ShopeeReturns = () => {
                       ))}
                     </div>
                   </td>
-                  <td className="p-4 text-sm font-mono text-gray-700 dark:text-[#D0D0D0]">
-                    <div className="space-y-1">
+                  <td className="p-4 align-top text-sm font-mono text-gray-900 dark:text-[#E0E0E0]">
+                    <div className="space-y-3">
                       {returnCase.order.items.map((item) => (
-                        <div key={item.id}>{item.quantity}</div>
+                        <div key={item.id} className="flex min-h-10 items-center">{item.quantity}</div>
                       ))}
                     </div>
                   </td>
@@ -238,7 +237,7 @@ export const ShopeeReturns = () => {
                       className="h-9 w-32 border-[0.5px] border-gray-300 bg-white px-3 text-sm font-mono font-bold text-gray-900 outline-none transition-colors focus:border-[#F97316] disabled:opacity-30 dark:border-[#333] dark:bg-[#111] dark:text-[#D0D0D0]"
                     />
                   </td>
-                  <td className="p-4 text-[10px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#888]">
+                  <td className="p-4 text-xs font-semibold text-gray-900 dark:text-[#E0E0E0]">
                     {getPaymentLabel(returnCase.order.purchaseMethod)}
                   </td>
                 </tr>

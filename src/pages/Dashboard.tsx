@@ -3,6 +3,7 @@ import { useInventory } from '../store/InventoryContext';
 import { formatCurrency, getShopeeReceivableAmount } from '../lib/utils';
 import { AlertTriangle, Store, ShoppingBag } from 'lucide-react';
 import { startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
+import { buildTopSellableProductsForMonth } from '../lib/dashboardMetrics';
 
 export const Dashboard = () => {
   const { products, shopeeSales, shopeeReturnCases, storeSales } = useInventory();
@@ -32,7 +33,7 @@ export const Dashboard = () => {
         if (returnCase.returnStatus === 'Barang Rusak - Dikompensasi') {
           shopeeRevenue += returnCase.compensationAmount;
         }
-        if (returnCase.returnStatus === 'Menunggu Cek' || returnCase.returnStatus === 'Barang Rusak - Menunggu Shopee') {
+        if (returnCase.returnStatus === 'Barang Rusak - Menunggu Shopee') {
           pendingReturnCases += 1;
         }
       }
@@ -50,40 +51,7 @@ export const Dashboard = () => {
 
   const stats = formatStats();
   const lowStockProducts = products.filter(p => p.stock < 5);
-  const topSellableProducts = (() => {
-    const soldQuantityByProduct = new Map<string, number>();
-
-    shopeeSales.forEach((sale) => {
-      const date = new Date(sale.date);
-      if (!isWithinInterval(date, { start: weekStart, end: weekEnd }) || sale.status === 'Returned') return;
-
-      sale.items.forEach((item) => {
-        soldQuantityByProduct.set(
-          item.productId,
-          (soldQuantityByProduct.get(item.productId) || 0) + item.quantity
-        );
-      });
-    });
-
-    storeSales.forEach((sale) => {
-      const date = new Date(sale.date);
-      if (!isWithinInterval(date, { start: weekStart, end: weekEnd })) return;
-
-      soldQuantityByProduct.set(
-        sale.productId,
-        (soldQuantityByProduct.get(sale.productId) || 0) + sale.quantity
-      );
-    });
-
-    return Array.from(soldQuantityByProduct.entries())
-      .map(([productId, quantity]) => ({
-        id: productId,
-        name: products.find((product) => product.id === productId)?.name || 'Produk Tidak Dikenal',
-        quantity,
-      }))
-      .sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name))
-      .slice(0, 5);
-  })();
+  const topSellableProducts = buildTopSellableProductsForMonth(products, shopeeSales, storeSales, now);
   const highestSoldQuantity = Math.max(...topSellableProducts.map((product) => product.quantity), 0);
 
   const getShopeeProductSummary = (items: typeof shopeeSales[number]['items']) => {
@@ -115,30 +83,31 @@ export const Dashboard = () => {
           title="Pendapatan Shopee" 
           value={formatCurrency(stats.shopeeRevenue)} 
           colorClass="text-gray-900 dark:text-[#E0E2E6]"
-          subtitle="Order diterima + kompensasi retur"
+          subtitle="Minggu ini - order diterima + kompensasi retur"
         />
         <StatCard 
           title="Pendapatan Toko" 
           value={formatCurrency(stats.storeRevenue)} 
           colorClass="text-gray-900 dark:text-[#E0E2E6]" 
+          subtitle="Minggu ini"
         />
         <StatCard 
           title="Order Masuk Retur" 
           value={stats.returnedOrders} 
           colorClass="text-[#FF4444]" 
-          subtitle={`${stats.pendingReturnCases} kasus masih perlu dicek`}
+          subtitle={`Minggu ini - ${stats.pendingReturnCases} kasus masih perlu dicek`}
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-3 bg-stone-50 border border-gray-200 p-5 shadow-sm dark:bg-[#151619] dark:border-[#2A2D35]">
           <div className="flex flex-col gap-1 mb-6">
-            <h3 className="text-sm font-bold uppercase italic text-gray-900 dark:text-[#E0E2E6]">01 / Produk Terlaris</h3>
-            <span className="text-[10px] uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">Minggu ini berdasarkan quantity terjual</span>
+            <h3 className="text-sm font-bold uppercase italic text-gray-900 dark:text-[#E0E2E6]">01 / Produk Terlaris Bulan Ini</h3>
+            <span className="text-[10px] uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">Bulan ini berdasarkan quantity terjual</span>
           </div>
 
           {topSellableProducts.length === 0 ? (
-            <div className="text-center py-8 text-[10px] uppercase font-bold text-gray-500 dark:text-[#8E9299]">Belum ada produk terjual minggu ini.</div>
+            <div className="text-center py-8 text-[10px] uppercase font-bold text-gray-500 dark:text-[#8E9299]">Belum ada produk terjual bulan ini.</div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
               {topSellableProducts.map((product) => {

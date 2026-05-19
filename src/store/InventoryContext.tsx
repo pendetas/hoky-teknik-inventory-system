@@ -2,19 +2,19 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Product, ShopeeReturnCase, ShopeeReturnStatus, ShopeeSale, StoreSale } from '../lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { productsService } from '../services/productsService';
-import { shopeeOrdersService, ShopeeOrderInput } from '../services/shopeeOrdersService';
+import { shopeeOrdersService, ShopeeOrderInput, ShopeeOrderStatusInput } from '../services/shopeeOrdersService';
 
 interface InventoryContextType {
   products: Product[];
   shopeeSales: ShopeeSale[];
   shopeeReturnCases: ShopeeReturnCase[];
   storeSales: StoreSale[];
-  addProduct: (product: Omit<Product, 'id' | 'createdAt'>) => Promise<void>;
+  addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   addShopeeSale: (sale: ShopeeOrderInput) => Promise<void>;
   updateShopeeSale: (id: string, sale: ShopeeOrderInput) => Promise<void>;
-  updateShopeeSaleStatus: (id: string, status: ShopeeSale['status']) => Promise<void>;
+  updateShopeeSaleStatus: (id: string, status: ShopeeSale['status'] | ShopeeOrderStatusInput) => Promise<void>;
   updateShopeeReturnCase: (id: string, status: ShopeeReturnStatus, compensationAmount: number, note: string) => Promise<void>;
   deleteShopeeSale: (id: string) => Promise<void>;
   addStoreSale: (sale: Omit<StoreSale, 'id' | 'createdAt'>) => void;
@@ -73,7 +73,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [storeSales, isLoaded]);
 
-  const addProduct = async (product: Omit<Product, 'id' | 'createdAt'>) => {
+  const addProduct = async (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
     const createdProduct = await productsService.createProduct(product);
     setProducts((prev) => [createdProduct, ...prev]);
   };
@@ -98,7 +98,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     await reloadSupabaseInventory();
   };
 
-  const updateShopeeSaleStatus = async (id: string, newStatus: ShopeeSale['status']) => {
+  const updateShopeeSaleStatus = async (id: string, newStatus: ShopeeSale['status'] | ShopeeOrderStatusInput) => {
     await shopeeOrdersService.updateShopeeOrderStatus(id, newStatus);
     await reloadSupabaseInventory();
   };
@@ -121,11 +121,12 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addStoreSale = (sale: Omit<StoreSale, 'id' | 'createdAt'>) => {
     const newSale = { ...sale, id: uuidv4(), createdAt: new Date().toISOString() };
     setStoreSales((prev) => [...prev, newSale]);
+    const updatedAt = new Date().toISOString();
     
     // Adjust product inventory (store sales always decrease inventory)
     setProducts((prev) => prev.map(p => {
       if (p.id === sale.productId) {
-        return { ...p, stock: p.stock - sale.quantity };
+        return { ...p, stock: p.stock - sale.quantity, updatedAt };
       }
       return p;
     }));
@@ -134,10 +135,11 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const deleteStoreSale = (id: string) => {
     const sale = storeSales.find(s => s.id === id);
     if (sale) {
+      const updatedAt = new Date().toISOString();
       // Revert inventory
       setProducts((prev) => prev.map(p => {
         if (p.id === sale.productId) {
-          return { ...p, stock: p.stock + sale.quantity };
+          return { ...p, stock: p.stock + sale.quantity, updatedAt };
         }
         return p;
       }));

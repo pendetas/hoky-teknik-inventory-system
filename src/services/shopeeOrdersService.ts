@@ -24,6 +24,7 @@ type ShopeeOrderRow = {
   payment_method: string;
   delivery_method: string;
   estimated_receipt_amount: number;
+  final_receipt_amount: number | null;
   receivable_amount: number;
   created_at: string;
   shopee_order_items?: ShopeeOrderItemRow[];
@@ -42,6 +43,11 @@ type ShopeeReturnCaseRow = {
 
 export type ShopeeOrderInput = Omit<ShopeeSale, 'id' | 'createdAt' | 'items' | 'receivableAmount'> & {
   items: Omit<ShopeeOrderItem, 'id'>[];
+};
+
+export type ShopeeOrderStatusInput = {
+  status: ShopeeOrderStatus;
+  finalReceiptAmount?: number | null;
 };
 
 const assertShopeeStatus = (status: string): ShopeeOrderStatus => {
@@ -77,7 +83,6 @@ const assertDeliveryMethod = (method: string): ShopeeDeliveryMethod => {
 
 const assertReturnStatus = (status: string): ShopeeReturnStatus => {
   if (
-    status === 'Menunggu Cek' ||
     status === 'Barang Bagus' ||
     status === 'Barang Rusak - Menunggu Shopee' ||
     status === 'Barang Rusak - Dikompensasi' ||
@@ -99,6 +104,7 @@ const toShopeeSale = (row: ShopeeOrderRow): ShopeeSale => ({
     quantity: item.quantity,
   })),
   price: row.estimated_receipt_amount,
+  finalReceiptAmount: row.final_receipt_amount,
   receivableAmount: row.receivable_amount,
   deliveryMethod: assertDeliveryMethod(row.delivery_method || 'Shopee Xpress'),
   purchaseMethod: assertPaymentMethod(row.payment_method),
@@ -131,6 +137,7 @@ export const shopeeOrdersService = {
         payment_method,
         delivery_method,
         estimated_receipt_amount,
+        final_receipt_amount,
         receivable_amount,
         created_at,
         shopee_order_items (
@@ -158,6 +165,7 @@ export const shopeeOrdersService = {
       p_payment_method: order.purchaseMethod,
       p_delivery_method: order.deliveryMethod,
       p_estimated_receipt_amount: order.price,
+      p_final_receipt_amount: order.finalReceiptAmount,
       p_items: order.items.map((item) => ({
         product_id: item.productId,
         quantity: item.quantity,
@@ -169,10 +177,14 @@ export const shopeeOrdersService = {
     }
   },
 
-  async updateShopeeOrderStatus(id: string, status: ShopeeOrderStatus): Promise<void> {
+  async updateShopeeOrderStatus(id: string, input: ShopeeOrderStatus | ShopeeOrderStatusInput): Promise<void> {
+    const status = typeof input === 'string' ? input : input.status;
+    const finalReceiptAmount = typeof input === 'string' ? undefined : input.finalReceiptAmount;
+
     const { error } = await supabase.rpc('update_shopee_order_status', {
       p_shopee_order_id: id,
       p_status: status,
+      p_final_receipt_amount: finalReceiptAmount ?? null,
     });
 
     if (error) {
@@ -190,6 +202,7 @@ export const shopeeOrdersService = {
       p_payment_method: order.purchaseMethod,
       p_delivery_method: order.deliveryMethod,
       p_estimated_receipt_amount: order.price,
+      p_final_receipt_amount: order.finalReceiptAmount,
       p_items: order.items.map((item) => ({
         product_id: item.productId,
         quantity: item.quantity,
@@ -221,6 +234,7 @@ export const shopeeOrdersService = {
           payment_method,
           delivery_method,
           estimated_receipt_amount,
+          final_receipt_amount,
           receivable_amount,
           created_at,
           shopee_order_items (

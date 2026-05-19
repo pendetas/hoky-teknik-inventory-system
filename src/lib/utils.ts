@@ -34,6 +34,12 @@ export const formatRupiahInput = (value: string | number) => {
   return `Rp ${Number(numericValue).toLocaleString('id-ID')},00`;
 };
 
-export const getShopeeReceivableAmount = (sale: Pick<ShopeeSale, 'receivableAmount'>) => {
+export const getShopeeReceivableAmount = (
+  sale: Pick<ShopeeSale, 'finalReceiptAmount' | 'receivableAmount'>
+) => {
+  if (typeof sale.finalReceiptAmount === 'number') {
+    return sale.finalReceiptAmount;
+  }
+
   return sale.receivableAmount;
 };

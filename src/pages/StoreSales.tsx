@@ -83,7 +83,7 @@ export const StoreSales = () => {
         <h3 className="text-sm font-bold uppercase italic text-gray-900 dark:text-[#E0E2E6]">02 / Pengiriman Toko</h3>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="bg-[#F27D26] hover:brightness-110 text-black px-4 py-2 text-xs font-black uppercase tracking-tighter flex items-center gap-2 transition-all"
+          className="bg-[#F27D26] hover:brightness-110 text-black px-4 py-2 text-xs font-black uppercase tracking-wide flex items-center gap-2 transition-all"
         >
           <Plus size={16} /> Pengiriman Baru
         </button>
@@ -93,7 +93,7 @@ export const StoreSales = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-gray-200 text-gray-500 text-[10px] uppercase tracking-widest font-bold dark:border-[#2A2D35] dark:text-[#8E9299]">
+              <tr className="border-b border-gray-200 text-gray-900 text-[10px] uppercase tracking-widest font-bold dark:border-[#2A2D35] dark:text-[#E0E2E6]">
                 <th className="p-4">Tanggal</th>
                 <th className="p-4">Produk</th>
                 <th className="p-4">ID Pengiriman</th>
@@ -109,7 +109,7 @@ export const StoreSales = () => {
                   <td className="p-4 text-sm font-mono text-gray-900 dark:text-[#E0E2E6]">{new Date(sale.date).toLocaleDateString()}</td>
                   <td className="p-4">
                     <p className="text-sm font-bold text-gray-900 dark:text-[#E0E2E6]">{getProductName(sale.productId)}</p>
-                    <p className="text-[10px] text-gray-500 font-mono mt-1 dark:text-[#8E9299]">{sale.quantity} unit @ {formatCurrency(sale.price)}</p>
+                    <p className="text-[10px] text-gray-900 font-mono mt-1 dark:text-[#E0E2E6]">{sale.quantity} unit @ {formatCurrency(sale.price)}</p>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-[#F27D26]">
@@ -124,11 +124,11 @@ export const StoreSales = () => {
                       {getPaymentLabel(sale.purchaseMethod)}
                     </span>
                   </td>
-                  <td className="p-4 text-sm text-gray-500 dark:text-[#8E9299]">
+                  <td className="p-4 text-sm text-gray-900 dark:text-[#E0E2E6]">
                     {sale.purchaseMethod === 'Credit' && sale.deadline ? (
                        <span className="text-[#FF4444] font-bold font-mono whitespace-nowrap text-xs">JATUH TEMPO: {new Date(sale.deadline).toLocaleDateString()}</span>
                     ) : (
-                      <span className="text-gray-400 dark:text-[#333740]">-</span>
+                      <span>-</span>
                     )}
                   </td>
                   <td className="p-4 text-sm font-bold font-mono text-gray-900 dark:text-[#E0E2E6]">

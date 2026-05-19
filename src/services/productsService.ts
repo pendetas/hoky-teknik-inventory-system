@@ -8,9 +8,10 @@ type ProductRow = {
   current_stock: number;
   photo_url: string | null;
   created_at: string;
+  updated_at: string;
 };
 
-type ProductInput = Omit<Product, 'id' | 'createdAt'>;
+type ProductInput = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>;
 
 const toProduct = (row: ProductRow): Product => ({
   id: row.id,
@@ -19,14 +20,15 @@ const toProduct = (row: ProductRow): Product => ({
   stock: row.current_stock,
   photoUrl: row.photo_url || undefined,
   createdAt: row.created_at,
+  updatedAt: row.updated_at,
 });
 
 export const productsService = {
   async listProducts(): Promise<Product[]> {
     const { data, error } = await supabase
       .from('products')
-      .select('id, name, description, current_stock, photo_url, created_at')
-      .order('created_at', { ascending: false });
+      .select('id, name, description, current_stock, photo_url, created_at, updated_at')
+      .order('updated_at', { ascending: false });
 
     if (error) {
       throw new Error(error.message);
@@ -44,7 +46,7 @@ export const productsService = {
         current_stock: product.stock,
         photo_url: product.photoUrl || null,
       })
-      .select('id, name, description, current_stock, photo_url, created_at')
+      .select('id, name, description, current_stock, photo_url, created_at, updated_at')
       .single();
 
     if (error) {
@@ -65,7 +67,7 @@ export const productsService = {
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
-      .select('id, name, description, current_stock, photo_url, created_at')
+      .select('id, name, description, current_stock, photo_url, created_at, updated_at')
       .single();
 
     if (error) {

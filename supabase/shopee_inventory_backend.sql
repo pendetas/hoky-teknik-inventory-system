@@ -1,6 +1,12 @@
 -- Run this in Supabase SQL Editor after products, shopee_orders, and shopee_order_items exist.
 -- This moves Shopee stock changes into database-side transactions.
 
+alter table products
+add column if not exists updated_at timestamptz not null default now();
+
+update products
+set updated_at = coalesce(updated_at, created_at, now());
+
 create table if not exists inventory_movements (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references products(id),
@@ -69,10 +75,17 @@ end $$;
 alter table inventory_movements enable row level security;
 
 alter table shopee_orders
+add column if not exists final_receipt_amount integer
+check (final_receipt_amount is null or final_receipt_amount >= 0);
+
+alter table shopee_orders
+drop column if exists receivable_amount;
+
+alter table shopee_orders
 add column if not exists receivable_amount integer
 generated always as (
   case
-    when status = 'Delivered' then estimated_receipt_amount
+    when status = 'Delivered' then coalesce(final_receipt_amount, estimated_receipt_amount)
     else 0
   end
 ) stored;
@@ -87,8 +100,7 @@ add column if not exists delivery_id text not null default '';
 create table if not exists shopee_return_cases (
   id uuid primary key default gen_random_uuid(),
   shopee_order_id uuid not null unique references shopee_orders(id) on delete cascade,
-  return_status text not null default 'Menunggu Cek' check (return_status in (
-    'Menunggu Cek',
+  return_status text not null default 'Barang Rusak - Menunggu Shopee' check (return_status in (
     'Barang Bagus',
     'Barang Rusak - Menunggu Shopee',
     'Barang Rusak - Dikompensasi',
@@ -103,6 +115,26 @@ create table if not exists shopee_return_cases (
 
 create index if not exists idx_shopee_return_cases_order_id
 on shopee_return_cases(shopee_order_id);
+
+update shopee_return_cases
+set return_status = 'Barang Rusak - Menunggu Shopee',
+    updated_at = now()
+where return_status = 'Menunggu Cek';
+
+alter table shopee_return_cases
+alter column return_status set default 'Barang Rusak - Menunggu Shopee';
+
+alter table shopee_return_cases
+drop constraint if exists shopee_return_cases_return_status_check;
+
+alter table shopee_return_cases
+add constraint shopee_return_cases_return_status_check
+check (return_status in (
+  'Barang Bagus',
+  'Barang Rusak - Menunggu Shopee',
+  'Barang Rusak - Dikompensasi',
+  'Barang Rusak - Ditolak'
+));
 
 alter table shopee_return_cases enable row level security;
 
@@ -155,6 +187,8 @@ on conflict (shopee_order_id) do nothing;
 
 drop function if exists create_shopee_order(text, date, text, text, integer, jsonb);
 drop function if exists create_shopee_order(text, date, text, text, text, integer, jsonb);
+drop function if exists create_shopee_order(text, text, date, text, text, text, integer, jsonb);
+drop function if exists create_shopee_order(text, text, date, text, text, text, integer, jsonb, integer);
 
 create or replace function create_shopee_order(
   p_order_id text,
@@ -164,7 +198,8 @@ create or replace function create_shopee_order(
   p_payment_method text,
   p_delivery_method text,
   p_estimated_receipt_amount integer,
-  p_items jsonb
+  p_items jsonb,
+  p_final_receipt_amount integer default null
 )
 returns uuid
 language plpgsql
@@ -191,6 +226,10 @@ begin
     raise exception 'Estimated receipt amount cannot be negative';
   end if;
 
+  if p_final_receipt_amount is not null and p_final_receipt_amount < 0 then
+    raise exception 'Final receipt amount cannot be negative';
+  end if;
+
   if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
     raise exception 'Shopee order must contain at least one item';
   end if;
@@ -203,6 +242,7 @@ begin
     payment_method,
     delivery_method,
     estimated_receipt_amount,
+    final_receipt_amount,
     created_by
   )
   values (
@@ -213,6 +253,7 @@ begin
     p_payment_method,
     p_delivery_method,
     p_estimated_receipt_amount,
+    case when p_status = 'Delivered' then p_final_receipt_amount else null end,
     auth.uid()
   )
   returning id into v_order_uuid;
@@ -301,9 +342,13 @@ begin
 end;
 $$;
 
+drop function if exists update_shopee_order_status(uuid, text);
+drop function if exists update_shopee_order_status(uuid, text, integer);
+
 create or replace function update_shopee_order_status(
   p_shopee_order_id uuid,
-  p_status text
+  p_status text,
+  p_final_receipt_amount integer default null
 )
 returns void
 language plpgsql
@@ -319,6 +364,10 @@ begin
     raise exception 'Invalid Shopee order status: %', p_status;
   end if;
 
+  if p_final_receipt_amount is not null and p_final_receipt_amount < 0 then
+    raise exception 'Final receipt amount cannot be negative';
+  end if;
+
   select status
   into v_old_status
   from shopee_orders
@@ -331,7 +380,11 @@ begin
 
   if v_old_status = p_status then
     update shopee_orders
-    set updated_at = now()
+    set final_receipt_amount = case
+          when p_status = 'Delivered' then coalesce(p_final_receipt_amount, final_receipt_amount, estimated_receipt_amount)
+          else null
+        end,
+        updated_at = now()
     where id = p_shopee_order_id;
     return;
   end if;
@@ -418,6 +471,10 @@ begin
 
   update shopee_orders
   set status = p_status,
+      final_receipt_amount = case
+        when p_status = 'Delivered' then coalesce(p_final_receipt_amount, estimated_receipt_amount)
+        else null
+      end,
       updated_at = now()
   where id = p_shopee_order_id;
 
@@ -436,6 +493,7 @@ end;
 $$;
 
 drop function if exists update_shopee_order(uuid, text, text, date, text, text, text, integer, jsonb);
+drop function if exists update_shopee_order(uuid, text, text, date, text, text, text, integer, jsonb, integer);
 
 create or replace function update_shopee_order(
   p_shopee_order_id uuid,
@@ -446,7 +504,8 @@ create or replace function update_shopee_order(
   p_payment_method text,
   p_delivery_method text,
   p_estimated_receipt_amount integer,
-  p_items jsonb
+  p_items jsonb,
+  p_final_receipt_amount integer default null
 )
 returns void
 language plpgsql
@@ -473,6 +532,10 @@ begin
 
   if p_estimated_receipt_amount < 0 then
     raise exception 'Estimated receipt amount cannot be negative';
+  end if;
+
+  if p_final_receipt_amount is not null and p_final_receipt_amount < 0 then
+    raise exception 'Final receipt amount cannot be negative';
   end if;
 
   if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
@@ -625,6 +688,7 @@ begin
       payment_method = p_payment_method,
       delivery_method = p_delivery_method,
       estimated_receipt_amount = p_estimated_receipt_amount,
+      final_receipt_amount = case when p_status = 'Delivered' then p_final_receipt_amount else null end,
       updated_at = now()
   where id = p_shopee_order_id;
 
@@ -661,7 +725,6 @@ declare
   v_final_compensation_amount integer;
 begin
   if p_return_status not in (
-    'Menunggu Cek',
     'Barang Bagus',
     'Barang Rusak - Menunggu Shopee',
     'Barang Rusak - Dikompensasi',
