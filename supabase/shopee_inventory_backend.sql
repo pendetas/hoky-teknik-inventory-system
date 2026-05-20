@@ -215,7 +215,7 @@ declare
   v_available_stock integer;
   v_is_active boolean;
 begin
-  if p_status not in ('Shipped', 'Delivered', 'Returned') then
+  if p_status not in ('Shipped', 'Delivered', 'Returned', 'Postponed', 'Cancelled') then
     raise exception 'Invalid Shopee order status: %', p_status;
   end if;
 
@@ -367,7 +367,7 @@ declare
   v_was_inventory_out boolean;
   v_is_inventory_out boolean;
 begin
-  if p_status not in ('Shipped', 'Delivered', 'Returned') then
+  if p_status not in ('Shipped', 'Delivered', 'Returned', 'Postponed', 'Cancelled') then
     raise exception 'Invalid Shopee order status: %', p_status;
   end if;
 
@@ -527,7 +527,7 @@ declare
   v_new_is_active boolean;
   v_stock_delta integer;
 begin
-  if p_status not in ('Shipped', 'Delivered', 'Returned') then
+  if p_status not in ('Shipped', 'Delivered', 'Returned', 'Postponed', 'Cancelled') then
     raise exception 'Invalid Shopee order status: %', p_status;
   end if;
 

@@ -12,6 +12,8 @@ type ReportMode = 'weekly' | 'monthly' | 'custom';
 const getStatusLabel = (status: ShopeeOrderStatus) => {
   if (status === 'Shipped') return 'Dikirim';
   if (status === 'Delivered') return 'Diterima';
+  if (status === 'Postponed') return 'Ditunda';
+  if (status === 'Cancelled') return 'Dibatal';
   return 'Diretur';
 };
 
@@ -90,9 +92,11 @@ export const ShopeeReports = () => {
     const shippedCount = filteredShipments.filter((sale) => sale.status === 'Shipped').length;
     const deliveredCount = filteredShipments.filter((sale) => sale.status === 'Delivered').length;
     const returnedOrderCount = filteredShipments.filter((sale) => sale.status === 'Returned').length;
+    const postponedOrderCount = filteredShipments.filter((sale) => sale.status === 'Postponed').length;
+    const cancelledOrderCount = filteredShipments.filter((sale) => sale.status === 'Cancelled').length;
     const topSellableRows = buildTopProductBarRows(
       filteredShipments
-        .filter((sale) => sale.status !== 'Returned')
+        .filter((sale) => ['Shipped', 'Delivered'].includes(sale.status))
         .flatMap((sale) => sale.items.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -110,6 +114,8 @@ export const ShopeeReports = () => {
       ['Order Masih Dikirim', shippedCount],
       ['Order Diterima', deliveredCount],
       ['Order Masuk Retur', returnedOrderCount],
+      ['Order Ditunda', postponedOrderCount],
+      ['Order Dibatal', cancelledOrderCount],
       ['Total Quantity Order', shipmentQty],
       [],
       ['PENGEMBALIAN SHOPEE', 'NILAI'],

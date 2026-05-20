@@ -169,7 +169,7 @@ export const Dashboard = () => {
                         <div className="text-xs font-bold text-gray-900 dark:text-[#E0E2E6]">{productName}</div>
                         <div className="text-[10px] text-gray-500 uppercase tracking-wider dark:text-[#8E9299]">
                           {activity.origin} - {new Date(activity.date).toLocaleDateString()}
-                          {('status' in activity) ? ` - ${activity.status === 'Shipped' ? 'Dikirim' : activity.status === 'Delivered' ? 'Diterima' : activity.status === 'Returned' ? 'Diretur' : activity.status}` : ''}
+                          {('status' in activity) ? ` - ${activity.status === 'Shipped' ? 'Dikirim' : activity.status === 'Delivered' ? 'Diterima' : activity.status === 'Returned' ? 'Diretur' : activity.status === 'Postponed' ? 'Ditunda' : activity.status === 'Cancelled' ? 'Dibatal' : activity.status}` : ''}
                         </div>
                       </div>
                       <div className="text-right flex flex-col justify-center">

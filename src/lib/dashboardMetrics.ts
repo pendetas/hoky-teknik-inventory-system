@@ -20,7 +20,10 @@ export const buildTopSellableProductsForMonth = (
 
   shopeeSales.forEach((sale) => {
     const saleDate = new Date(sale.date);
-    if (!isWithinInterval(saleDate, { start: monthStart, end: monthEnd }) || sale.status === 'Returned') return;
+    if (
+      !isWithinInterval(saleDate, { start: monthStart, end: monthEnd }) ||
+      !['Shipped', 'Delivered'].includes(sale.status)
+    ) return;
 
     sale.items.forEach((item) => {
       soldQuantityByProduct.set(
