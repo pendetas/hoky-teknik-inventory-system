@@ -52,7 +52,13 @@ export type ShopeeOrderStatusInput = {
 };
 
 const assertShopeeStatus = (status: string): ShopeeOrderStatus => {
-  if (status === 'Shipped' || status === 'Delivered' || status === 'Returned') {
+  if (
+    status === 'Shipped' ||
+    status === 'Delivered' ||
+    status === 'Returned' ||
+    status === 'Postponed' ||
+    status === 'Cancelled'
+  ) {
     return status;
   }
 

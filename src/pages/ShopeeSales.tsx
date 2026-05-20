@@ -1,9 +1,128 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useInventory } from '../store/InventoryContext';
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Edit2, Image as ImageIcon, Plus, Printer, ReceiptText, Search, X } from 'lucide-react';
 import { formatCurrency, formatRupiahInput, getShopeeReceivableAmount, parseCurrencyInput } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShopeeDeliveryMethod, ShopeePurchaseMethod, ShopeeOrderStatus, ShopeeSale } from '../lib/types';
+import { Product, ShopeeDeliveryMethod, ShopeePurchaseMethod, ShopeeOrderStatus, ShopeeSale } from '../lib/types';
+
+const getLocalDateValue = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const SHOPEE_SALES_PAGE_SIZE = 10;
+
+type ProductPickerProps = {
+  products: Product[];
+  selectedProductId: string;
+  onSelect: (productId: string) => void;
+};
+
+const getProductBrand = (productName: string) => productName.trim().split(/\s+/)[0]?.toUpperCase() || 'LAINNYA';
+
+const ProductPicker = ({ products, selectedProductId, onSelect }: ProductPickerProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selectedProduct = products.find((product) => product.id === selectedProductId);
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const groupedProducts = useMemo(() => {
+    const filteredProducts = products
+      .filter((product) => {
+        if (!normalizedQuery) return true;
+        return [
+          product.name,
+          product.description,
+          getProductBrand(product.name),
+        ].some((value) => value.toLowerCase().includes(normalizedQuery));
+      })
+      .sort((a, b) => getProductBrand(a.name).localeCompare(getProductBrand(b.name)) || a.name.localeCompare(b.name));
+
+    return filteredProducts.reduce<Array<{ brand: string; products: Product[] }>>((groups, product) => {
+      const brand = getProductBrand(product.name);
+      const currentGroup = groups[groups.length - 1];
+
+      if (currentGroup?.brand === brand) {
+        currentGroup.products.push(product);
+      } else {
+        groups.push({ brand, products: [product] });
+      }
+
+      return groups;
+    }, []);
+  }, [normalizedQuery, products]);
+
+  return (
+    <div
+      className={`relative ${isOpen ? 'z-50' : 'z-0'}`}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setIsOpen(false);
+          setQuery('');
+        }
+      }}
+    >
+      <div className="flex h-10 items-center gap-2 border border-gray-300 bg-white px-2 transition-colors focus-within:border-[#F27D26] dark:border-[#333740] dark:bg-[#1A1C21]">
+        <Search size={14} className="shrink-0 text-gray-500 dark:text-[#8E9299]" />
+        <input
+          type="text"
+          value={isOpen ? query : selectedProduct?.name || ''}
+          onFocus={() => {
+            setIsOpen(true);
+            setQuery('');
+          }}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setIsOpen(true);
+          }}
+          placeholder={selectedProduct ? selectedProduct.name : 'Cari produk / brand...'}
+          className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-[#555]"
+        />
+        <ChevronDown size={15} className="shrink-0 text-gray-500 dark:text-[#8E9299]" />
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-[44px] max-h-72 overflow-auto border border-[#F27D26] bg-white shadow-xl dark:bg-[#111]">
+          {groupedProducts.length > 0 ? (
+            groupedProducts.map((group) => (
+              <div key={group.brand}>
+                <div className="sticky top-0 bg-gray-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-gray-500 dark:bg-[#1A1C21] dark:text-[#8E9299]">
+                  {group.brand}
+                </div>
+                {group.products.map((product) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      onSelect(product.id);
+                      setIsOpen(false);
+                      setQuery('');
+                    }}
+                    className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs font-bold transition-colors hover:bg-orange-50 dark:hover:bg-[#1A1C21] ${
+                      selectedProductId === product.id ? 'bg-orange-50 text-[#F27D26] dark:bg-[rgba(249,115,22,0.12)]' : 'text-gray-900 dark:text-white'
+                    }`}
+                  >
+                    <span className="min-w-0 truncate">{product.name}</span>
+                    <span className={`shrink-0 font-mono text-[10px] ${product.stock <= 0 ? 'text-[#EF4444]' : 'text-gray-500 dark:text-[#8E9299]'}`}>
+                      Stok: {product.stock}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ))
+          ) : (
+            <div className="px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">
+              Produk tidak ditemukan
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const ShopeeSales = () => {
   const { products, shopeeSales, addShopeeSale, updateShopeeSale, updateShopeeSaleStatus } = useInventory();
@@ -11,11 +130,12 @@ export const ShopeeSales = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(() => getLocalDateValue());
+  const [endDate, setEndDate] = useState(() => getLocalDateValue());
   const [statusFilter, setStatusFilter] = useState<'All' | ShopeeOrderStatus>('All');
   const [deliveryMethodFilter, setDeliveryMethodFilter] = useState<'All' | ShopeeDeliveryMethod>('All');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<'All' | ShopeePurchaseMethod>('All');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isDatePanelOpen, setIsDatePanelOpen] = useState(false);
   const [openStatusMenuId, setOpenStatusMenuId] = useState<string | null>(null);
   const [deliveryConfirmation, setDeliveryConfirmation] = useState<{
@@ -41,7 +161,7 @@ export const ShopeeSales = () => {
     purchaseMethod: 'Online Payment' as ShopeePurchaseMethod,
     note: '',
     status: 'Shipped' as ShopeeOrderStatus,
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalDateValue(),
     finalReceiptAmount: null as number | null
   });
   const [items, setItems] = useState([{ productId: '', quantity: '' }]);
@@ -54,7 +174,7 @@ export const ShopeeSales = () => {
     purchaseMethod: 'Online Payment' as ShopeePurchaseMethod,
     note: '',
     status: 'Shipped' as ShopeeOrderStatus,
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalDateValue(),
     finalReceiptAmount: null as number | null
   });
 
@@ -245,16 +365,20 @@ export const ShopeeSales = () => {
   const getStatusLabel = (status: ShopeeOrderStatus) => {
     if (status === 'Shipped') return 'Dikirim';
     if (status === 'Delivered') return 'Diterima';
+    if (status === 'Postponed') return 'Ditunda';
+    if (status === 'Cancelled') return 'Dibatal';
     return 'Diretur';
   };
 
   const getStatusBadgeClass = (status: ShopeeOrderStatus) => {
     if (status === 'Shipped') return 'border-[rgba(234,179,8,0.2)] bg-[rgba(234,179,8,0.12)] text-[#CA8A04]';
     if (status === 'Delivered') return 'border-[rgba(16,185,129,0.2)] bg-[rgba(16,185,129,0.12)] text-[#059669]';
+    if (status === 'Postponed') return 'border-[rgba(255,255,255,0.28)] bg-[#6B7280] text-white dark:bg-[rgba(255,255,255,0.12)] dark:text-white';
+    if (status === 'Cancelled') return 'border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.12)] text-[#EF4444]';
     return 'border-[rgba(59,130,246,0.2)] bg-[rgba(59,130,246,0.12)] text-[#3B82F6]';
   };
 
-  const statusOptions: ShopeeOrderStatus[] = ['Shipped', 'Delivered', 'Returned'];
+  const statusOptions: ShopeeOrderStatus[] = ['Shipped', 'Delivered', 'Returned', 'Postponed', 'Cancelled'];
 
   const handleStatusChange = (sale: ShopeeSale, status: ShopeeOrderStatus) => {
     setOpenStatusMenuId(null);
@@ -331,13 +455,6 @@ export const ShopeeSales = () => {
     }
   };
 
-  const toDateValue = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
   const formatDateLabel = (value: string) => {
     if (!value) return '';
     return new Date(`${value}T00:00:00`).toLocaleDateString('id-ID', {
@@ -352,6 +469,69 @@ export const ShopeeSales = () => {
     if (startDate && endDate) return `${formatDateLabel(startDate)} - ${formatDateLabel(endDate)}`;
     if (startDate) return `Mulai ${formatDateLabel(startDate)}`;
     return 'Pilih rentang tanggal';
+  };
+
+  const formatShortDateLabel = (value: string) => {
+    if (!value) return '';
+    return new Date(`${value}T00:00:00`).toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
+
+  const formatOrderTime = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '--:--';
+
+    return date.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }).replace('.', ':');
+  };
+
+  const getShiftedDateValue = (daysBack: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() - daysBack);
+    return getLocalDateValue(date);
+  };
+
+  const applyDatePreset = (preset: 'today' | 'yesterday' | 'sevenDays') => {
+    const today = getLocalDateValue();
+
+    if (preset === 'today') {
+      setStartDate(today);
+      setEndDate(today);
+      setVisibleMonth(new Date());
+      return;
+    }
+
+    if (preset === 'yesterday') {
+      const yesterday = getShiftedDateValue(1);
+      setStartDate(yesterday);
+      setEndDate(yesterday);
+      setVisibleMonth(new Date(`${yesterday}T00:00:00`));
+      return;
+    }
+
+    setStartDate(getShiftedDateValue(6));
+    setEndDate(today);
+    setVisibleMonth(new Date());
+  };
+
+  const getShipmentPeriodLabel = () => {
+    const today = getLocalDateValue();
+    const yesterday = getShiftedDateValue(1);
+    const sevenDaysStart = getShiftedDateValue(6);
+
+    if (startDate === today && endDate === today) return `Kiriman Hari Ini (${formatShortDateLabel(today)})`;
+    if (startDate === yesterday && endDate === yesterday) return `Kiriman Kemarin (${formatShortDateLabel(yesterday)})`;
+    if (startDate === sevenDaysStart && endDate === today) {
+      return `Kiriman 7 Hari (${formatShortDateLabel(sevenDaysStart)} - ${formatShortDateLabel(today)})`;
+    }
+    if (startDate && endDate) return `Kiriman ${formatShortDateLabel(startDate)} - ${formatShortDateLabel(endDate)}`;
+    if (startDate) return `Kiriman Mulai ${formatShortDateLabel(startDate)}`;
+    return `Kiriman Hari Ini (${formatShortDateLabel(today)})`;
   };
 
   const handleCalendarDateClick = (dateValue: string, clickCount: number) => {
@@ -389,7 +569,7 @@ export const ShopeeSales = () => {
     return Array.from({ length: 42 }, (_, index) => {
       const date = new Date(firstCalendarDate);
       date.setDate(firstCalendarDate.getDate() + index);
-      const dateValue = toDateValue(date);
+      const dateValue = getLocalDateValue(date);
       const isCurrentMonth = date.getMonth() === month;
       const isSelectedStart = dateValue === startDate;
       const isSelectedEnd = dateValue === endDate;
@@ -425,11 +605,7 @@ export const ShopeeSales = () => {
           .join(' ')
           .toLowerCase();
         const paymentLabel = getPaymentLabel(sale.purchaseMethod).toLowerCase();
-        const statusLabel = sale.status === 'Shipped'
-          ? 'dikirim shipped'
-          : sale.status === 'Delivered'
-            ? 'diterima delivered'
-            : 'diretur retur returned';
+        const statusLabel = `${getStatusLabel(sale.status)} ${sale.status}`.toLowerCase();
 
         return [
           sale.orderId,
@@ -443,71 +619,86 @@ export const ShopeeSales = () => {
           productNames,
         ].some((value) => value.toLowerCase().includes(normalizedSearch));
       })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => {
+        const dateCompare = new Date(`${b.date}T00:00:00`).getTime() - new Date(`${a.date}T00:00:00`).getTime();
+        if (dateCompare !== 0) return dateCompare;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
   }, [deliveryMethodFilter, endDate, paymentMethodFilter, products, searchTerm, shopeeSales, startDate, statusFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [deliveryMethodFilter, endDate, paymentMethodFilter, searchTerm, startDate, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredShopeeSales.length / SHOPEE_SALES_PAGE_SIZE));
+  const firstVisibleIndex = (currentPage - 1) * SHOPEE_SALES_PAGE_SIZE;
+  const paginatedShopeeSales = filteredShopeeSales.slice(
+    firstVisibleIndex,
+    firstVisibleIndex + SHOPEE_SALES_PAGE_SIZE
+  );
 
   const hasActiveFilter = searchTerm || startDate || endDate || statusFilter !== 'All' || deliveryMethodFilter !== 'All' || paymentMethodFilter !== 'All';
 
   return (
-    <div className="space-y-6">
-      <div className="bg-stone-50 border border-gray-200 p-5 shadow-sm dark:bg-[#151619] dark:border-[#2A2D35]">
-        <div className="space-y-5">
-          <div className="flex flex-col gap-1 border-b border-gray-200 pb-4 dark:border-[#2A2D35]">
-            <h3 className="text-sm font-bold uppercase italic text-gray-900 dark:text-[#E0E2E6]">Filter Pengiriman Shopee</h3>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">
+    <div className="space-y-4">
+      <div className="bg-stone-50 border border-gray-200 p-4 shadow-sm dark:bg-[#151619] dark:border-[#2A2D35]">
+        <div className="space-y-3">
+          <div className="flex flex-col gap-1 border-b border-gray-200 pb-3 dark:border-[#2A2D35]">
+            <h3 className="text-xs font-bold uppercase italic text-gray-900 dark:text-[#E0E2E6]">Filter Pengiriman Shopee</h3>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">
               {filteredShopeeSales.length} dari {shopeeSales.length} data ditampilkan
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <label className="block">
-              <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Cari</span>
-              <div className="mt-1 flex h-10 items-center gap-2 border-[0.5px] border-gray-300 bg-white px-3 transition-colors focus-within:border-[#F97316] dark:border-[#333] dark:bg-[#111]">
-                <Search size={15} className="text-gray-500 dark:text-[#A0A0A0]" />
+              <span className="text-[9px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Cari</span>
+              <div className="mt-1 flex h-9 items-center gap-2 border-[0.5px] border-gray-300 bg-white px-2.5 transition-colors focus-within:border-[#F97316] dark:border-[#333] dark:bg-[#111]">
+                <Search size={14} className="text-gray-500 dark:text-[#A0A0A0]" />
                 <input
                   type="search"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Order ID, produk, status..."
-                  className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-[#A0A0A0] dark:placeholder:text-[#555]"
+                  className="w-full bg-transparent text-xs text-gray-900 outline-none placeholder:text-gray-400 dark:text-[#A0A0A0] dark:placeholder:text-[#555]"
                 />
               </div>
             </label>
 
               <div className="relative">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Tanggal</span>
+                <span className="text-[9px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Tanggal</span>
                 <button
                   type="button"
                   onClick={() => setIsDatePanelOpen((prev) => !prev)}
-                  className="mt-1 flex h-10 w-full items-center gap-2 border-[0.5px] border-gray-300 bg-white px-3 text-left text-sm text-gray-900 outline-none transition-colors focus-visible:border-[#F97316] dark:border-[#333] dark:bg-[#111] dark:text-[#A0A0A0]"
+                  className="mt-1 flex h-9 w-full items-center gap-2 border-[0.5px] border-gray-300 bg-white px-2.5 text-left text-xs text-gray-900 outline-none transition-colors focus-visible:border-[#F97316] dark:border-[#333] dark:bg-[#111] dark:text-[#A0A0A0]"
                 >
-                  <Calendar size={15} className="text-gray-500 dark:text-[#A0A0A0]" />
+                  <Calendar size={14} className="text-gray-500 dark:text-[#A0A0A0]" />
                     <span className={startDate ? 'text-gray-900 dark:text-[#A0A0A0]' : 'text-gray-400 dark:text-[#555]'}>
                     {getDateRangeLabel()}
                   </span>
                 </button>
 
                 {isDatePanelOpen && (
-                  <div className="absolute left-0 top-[72px] z-30 w-[320px] border-[0.5px] border-gray-200 bg-white p-4 shadow-xl dark:border-[#333] dark:bg-[#111]">
-                    <div className="mb-3 flex items-center justify-between">
+                  <div className="absolute left-0 top-[64px] z-30 w-[300px] border-[0.5px] border-gray-200 bg-white p-3 shadow-xl dark:border-[#333] dark:bg-[#111]">
+                    <div className="mb-2 flex items-center justify-between">
                       <button
                         type="button"
                         onClick={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                        className="flex h-8 w-8 items-center justify-center border-[0.5px] border-gray-200 text-gray-700 hover:bg-gray-100 dark:border-[#333] dark:text-[#A0A0A0] dark:hover:bg-[#161616]"
+                        className="flex h-7 w-7 items-center justify-center border-[0.5px] border-gray-200 text-gray-700 hover:bg-gray-100 dark:border-[#333] dark:text-[#A0A0A0] dark:hover:bg-[#161616]"
                         title="Bulan sebelumnya"
                       >
-                        <ChevronLeft size={16} />
+                        <ChevronLeft size={14} />
                       </button>
-                      <div className="text-xs font-black uppercase tracking-widest text-gray-900 dark:text-[#A0A0A0]">
+                      <div className="text-[11px] font-black uppercase tracking-widest text-gray-900 dark:text-[#A0A0A0]">
                         {visibleMonth.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
                       </div>
                       <button
                         type="button"
                         onClick={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                        className="flex h-8 w-8 items-center justify-center border-[0.5px] border-gray-200 text-gray-700 hover:bg-gray-100 dark:border-[#333] dark:text-[#A0A0A0] dark:hover:bg-[#161616]"
+                        className="flex h-7 w-7 items-center justify-center border-[0.5px] border-gray-200 text-gray-700 hover:bg-gray-100 dark:border-[#333] dark:text-[#A0A0A0] dark:hover:bg-[#161616]"
                         title="Bulan berikutnya"
                       >
-                        <ChevronRight size={16} />
+                        <ChevronRight size={14} />
                       </button>
                     </div>
 
@@ -525,7 +716,7 @@ export const ShopeeSales = () => {
                             key={day.dateValue}
                             type="button"
                             onClick={(event) => handleCalendarDateClick(day.dateValue, event.detail)}
-                            className={`h-9 text-xs font-bold transition-colors ${
+                            className={`h-8 text-[11px] font-bold transition-colors ${
                               isSelected
                                 ? 'bg-[#F27D26] text-black'
                                 : day.isInRange
@@ -541,18 +732,17 @@ export const ShopeeSales = () => {
                       })}
                     </div>
 
-                    <div className="mt-3 flex items-center justify-between gap-2 border-t-[0.5px] border-gray-200 pt-3 dark:border-[#333]">
+                    <div className="mt-2 flex items-center justify-between gap-2 border-t-[0.5px] border-gray-200 pt-2 dark:border-[#333]">
                       <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#555]">Klik mulai dan akhir. Dobel klik untuk 1 tanggal.</p>
                       <button
                         type="button"
                         onClick={() => {
-                          setStartDate('');
-                          setEndDate('');
+                          applyDatePreset('today');
                           setIsDatePanelOpen(false);
                         }}
                         className="text-[10px] font-black uppercase tracking-tighter text-gray-500 transition-colors hover:text-gray-700 dark:text-[#666] dark:hover:text-[#A0A0A0]"
                       >
-                        Bersihkan
+                        Hari Ini
                       </button>
                     </div>
                   </div>
@@ -560,29 +750,31 @@ export const ShopeeSales = () => {
               </div>
 
             <label className="block">
-              <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Status</span>
+              <span className="text-[9px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Status</span>
               <div className="relative mt-1">
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as 'All' | ShopeeOrderStatus)}
-                  className="h-10 w-full appearance-none border-[0.5px] border-gray-300 bg-white px-3 pr-9 text-sm text-gray-900 outline-none transition-colors focus:border-[#F97316] dark:border-[#333] dark:bg-[#111] dark:text-[#A0A0A0]"
+                  className="h-9 w-full appearance-none border-[0.5px] border-gray-300 bg-white px-2.5 pr-8 text-xs text-gray-900 outline-none transition-colors focus:border-[#F97316] dark:border-[#333] dark:bg-[#111] dark:text-[#A0A0A0]"
                 >
                   <option value="All">Semua Status</option>
                   <option value="Shipped">Dikirim</option>
                   <option value="Delivered">Diterima</option>
                   <option value="Returned">Diretur</option>
+                  <option value="Postponed">Ditunda</option>
+                  <option value="Cancelled">Dibatal</option>
                 </select>
-                <ChevronDown size={15} className="pointer-events-none absolute inset-y-0 right-3 my-auto text-gray-500 dark:text-[#A0A0A0]" />
+                <ChevronDown size={14} className="pointer-events-none absolute inset-y-0 right-2.5 my-auto text-gray-500 dark:text-[#A0A0A0]" />
               </div>
             </label>
 
             <label className="block">
-              <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Metode Pengiriman</span>
+              <span className="text-[9px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Metode Pengiriman</span>
               <div className="relative mt-1">
                 <select
                   value={deliveryMethodFilter}
                   onChange={(e) => setDeliveryMethodFilter(e.target.value as 'All' | ShopeeDeliveryMethod)}
-                  className="h-10 w-full appearance-none border-[0.5px] border-gray-300 bg-white px-3 pr-9 text-sm text-gray-900 outline-none transition-colors focus:border-[#F97316] dark:border-[#333] dark:bg-[#111] dark:text-[#A0A0A0]"
+                  className="h-9 w-full appearance-none border-[0.5px] border-gray-300 bg-white px-2.5 pr-8 text-xs text-gray-900 outline-none transition-colors focus:border-[#F97316] dark:border-[#333] dark:bg-[#111] dark:text-[#A0A0A0]"
                 >
                   <option value="All">Semua Pengiriman</option>
                   <option value="Shopee Xpress">Shopee Xpress</option>
@@ -592,17 +784,17 @@ export const ShopeeSales = () => {
                   <option value="Anteraja">Anteraja</option>
                   <option value="Lainnya">Lainnya</option>
                 </select>
-                <ChevronDown size={15} className="pointer-events-none absolute inset-y-0 right-3 my-auto text-gray-500 dark:text-[#A0A0A0]" />
+                <ChevronDown size={14} className="pointer-events-none absolute inset-y-0 right-2.5 my-auto text-gray-500 dark:text-[#A0A0A0]" />
               </div>
             </label>
 
             <label className="block">
-              <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Metode Pembayaran</span>
+              <span className="text-[9px] uppercase font-bold tracking-widest text-gray-500 dark:text-[#8E9299]">Metode Pembayaran</span>
               <div className="relative mt-1">
                 <select
                   value={paymentMethodFilter}
                   onChange={(e) => setPaymentMethodFilter(e.target.value as 'All' | ShopeePurchaseMethod)}
-                  className="h-10 w-full appearance-none border-[0.5px] border-gray-300 bg-white px-3 pr-9 text-sm text-gray-900 outline-none transition-colors focus:border-[#F97316] dark:border-[#333] dark:bg-[#111] dark:text-[#A0A0A0]"
+                  className="h-9 w-full appearance-none border-[0.5px] border-gray-300 bg-white px-2.5 pr-8 text-xs text-gray-900 outline-none transition-colors focus:border-[#F97316] dark:border-[#333] dark:bg-[#111] dark:text-[#A0A0A0]"
                 >
                   <option value="All">Semua Pembayaran</option>
                   <option value="Online Payment">Pembayaran Online</option>
@@ -610,7 +802,7 @@ export const ShopeeSales = () => {
                   <option value="Shopee Pay Later">Shopee Pay Later</option>
                   <option value="Instant">Instant</option>
                 </select>
-                <ChevronDown size={15} className="pointer-events-none absolute inset-y-0 right-3 my-auto text-gray-500 dark:text-[#A0A0A0]" />
+                <ChevronDown size={14} className="pointer-events-none absolute inset-y-0 right-2.5 my-auto text-gray-500 dark:text-[#A0A0A0]" />
               </div>
             </label>
 
@@ -618,64 +810,98 @@ export const ShopeeSales = () => {
               type="button"
               onClick={() => {
                 setSearchTerm('');
-                setStartDate('');
-                setEndDate('');
+                applyDatePreset('today');
                 setStatusFilter('All');
                 setDeliveryMethodFilter('All');
                 setPaymentMethodFilter('All');
               }}
               disabled={!hasActiveFilter}
-              className="h-10 self-end border-[0.5px] border-[#F97316] bg-transparent px-4 text-[10px] font-black uppercase tracking-tighter text-[#F97316] transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-[rgba(249,115,22,0.08)]"
+              className="h-9 self-end border-[0.5px] border-[#F97316] bg-transparent px-3 text-[9px] font-black uppercase tracking-tighter text-[#F97316] transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-[rgba(249,115,22,0.08)]"
             >
               Reset
             </button>
           </div>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3 dark:border-[#2A2D35]">
+            <span className="mr-1 text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">WAKTU</span>
+            {[
+              { label: 'Hari Ini', preset: 'today' as const },
+              { label: 'Kemarin', preset: 'yesterday' as const },
+              { label: '7 Hari', preset: 'sevenDays' as const },
+            ].map((option) => (
+              <button
+                key={option.preset}
+                type="button"
+                onClick={() => applyDatePreset(option.preset)}
+                className="border-[0.5px] border-gray-300 bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-tighter text-gray-700 transition-colors hover:border-[#F97316] hover:text-[#F97316] dark:border-[#333] dark:bg-[#111] dark:text-[#A0A0A0] dark:hover:border-[#F97316] dark:hover:text-[#F97316]"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="flex justify-start">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <button 
           onClick={handleOpenCreateModal}
-          className="bg-[#F27D26] hover:brightness-110 text-black px-6 py-3 text-xs font-black uppercase tracking-wide flex items-center justify-center gap-2 transition-all"
+          className="bg-[#F27D26] hover:brightness-110 text-black px-4 py-2.5 text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-2 transition-all"
         >
-          <Plus size={16} /> Tambah Data
+          <Plus size={14} /> Tambah Data
         </button>
+        <div className="self-start py-1 text-[10px] font-black uppercase tracking-widest text-black dark:text-[#F97316] sm:self-auto">
+          {getShipmentPeriodLabel()}
+        </div>
       </div>
 
       <div className="bg-stone-50 border border-gray-200 overflow-hidden shadow-sm dark:bg-[#111] dark:border-[#333]">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b-[0.5px] border-gray-200 text-[10px] uppercase tracking-[0.08em] font-bold text-gray-900 dark:border-[#1E1E1E] dark:text-[#E0E0E0]">
-                <th className="p-4">Order ID</th>
-                <th className="p-4">No. Resi</th>
-                <th className="p-4">Tanggal</th>
-                <th className="p-4">Produk</th>
-                <th className="p-4">Quantity</th>
-                <th className="p-4">Penerimaan Shopee</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Metode Pengiriman</th>
-                <th className="p-4">Jenis Pembayaran</th>
-                <th className="p-4">Catatan</th>
-                <th className="p-4 text-center">Aksi</th>
+              <tr className="border-b-[0.5px] border-gray-200 text-[9px] uppercase tracking-[0.08em] font-bold text-gray-900 dark:border-[#1E1E1E] dark:text-[#E0E0E0]">
+                <th className="px-3 py-2.5">Order ID</th>
+                <th className="px-3 py-2.5">No. Resi</th>
+                <th className="px-3 py-2.5">Tanggal</th>
+                <th className="px-3 py-2.5">Produk</th>
+                <th className="px-3 py-2.5">Quantity</th>
+                <th className="px-3 py-2.5">Penerimaan Shopee</th>
+                <th className="px-3 py-2.5">Status</th>
+                <th className="px-3 py-2.5">Metode Pengiriman</th>
+                <th className="px-3 py-2.5">Jenis Pembayaran</th>
+                <th className="px-3 py-2.5">Catatan</th>
+                <th className="px-3 py-2.5 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y-[0.5px] divide-gray-200 dark:divide-[#1E1E1E]">
-              {filteredShopeeSales.map(sale => {
+              {paginatedShopeeSales.map(sale => {
                 const hasMultipleItems = sale.items.length > 1;
 
                 return (
-                <tr key={sale.id} className="transition-colors hover:bg-gray-100 dark:bg-[#111] dark:hover:bg-[#161616]">
-                  <td className="p-4 align-middle text-sm font-mono font-bold text-gray-900 dark:text-[#E0E0E0]">{sale.orderId || '-'}</td>
-                  <td className="p-4 align-middle text-sm font-mono font-bold text-gray-900 dark:text-[#E0E0E0]">
+                <motion.tr
+                  key={sale.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  whileHover={{ boxShadow: 'inset 3px 0 0 #F97316' }}
+                  transition={{ duration: 0.14, ease: 'easeOut' }}
+                  className={`relative transition-colors hover:bg-gray-100 dark:bg-[#111] dark:hover:bg-[#161616] ${openStatusMenuId === sale.id ? 'z-20' : 'z-0'}`}
+                >
+                  <td className="px-3 py-2 align-middle text-xs font-mono font-bold text-gray-900 dark:text-[#E0E0E0]">{sale.orderId || '-'}</td>
+                  <td className="px-3 py-2 align-middle text-xs font-mono font-bold text-gray-900 dark:text-[#E0E0E0]">
                     {sale.deliveryId || <span>&mdash;</span>}
                   </td>
-                  <td className="p-4 align-middle text-sm font-mono text-gray-900 dark:text-[#E0E0E0]">{new Date(sale.date).toLocaleDateString()}</td>
-                  <td className={`p-4 text-sm font-semibold ${hasMultipleItems ? 'align-top' : 'align-middle'}`}>
-                    <div className="space-y-3">
+                  <td className="px-3 py-2 align-middle text-xs font-mono text-gray-900 dark:text-[#E0E0E0]">
+                    <div className="flex flex-col gap-1">
+                      <span>{new Date(sale.date).toLocaleDateString()}</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">
+                        {formatOrderTime(sale.createdAt)} WIB
+                      </span>
+                    </div>
+                  </td>
+                  <td className={`px-3 py-2 text-xs font-semibold ${hasMultipleItems ? 'align-top' : 'align-middle'}`}>
+                    <div className="space-y-2">
                       {sale.items.map((item) => (
-                        <div key={item.id} className="flex min-h-10 items-center gap-3 text-gray-900 dark:text-[#E0E0E0]">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden border-[0.5px] border-gray-300 bg-gray-100 text-gray-400 dark:border-[#333] dark:bg-[#0B0B0B] dark:text-[#555]">
+                        <div key={item.id} className="flex min-h-8 items-center gap-2 text-gray-900 dark:text-[#E0E0E0]">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden border-[0.5px] border-gray-300 bg-gray-100 text-gray-400 dark:border-[#333] dark:bg-[#0B0B0B] dark:text-[#555]">
                             {getProduct(item.productId)?.photoUrl ? (
                               <img
                                 src={getProduct(item.productId)?.photoUrl}
@@ -683,7 +909,7 @@ export const ShopeeSales = () => {
                                 className="h-full w-full object-cover"
                               />
                             ) : (
-                              <ImageIcon size={16} />
+                              <ImageIcon size={14} />
                             )}
                           </div>
                           <span>{getProductName(item.productId)}</span>
@@ -691,80 +917,82 @@ export const ShopeeSales = () => {
                       ))}
                     </div>
                   </td>
-                  <td className={`p-4 text-sm font-mono text-gray-900 dark:text-[#E0E0E0] ${hasMultipleItems ? 'align-top' : 'align-middle'}`}>
-                    <div className="space-y-3">
+                  <td className={`px-3 py-2 text-xs font-mono text-gray-900 dark:text-[#E0E0E0] ${hasMultipleItems ? 'align-top' : 'align-middle'}`}>
+                    <div className="space-y-2">
                       {sale.items.map((item) => (
-                        <div key={item.id} className="flex min-h-10 items-center">{item.quantity}</div>
+                        <div key={item.id} className="flex min-h-8 items-center">{item.quantity}</div>
                       ))}
                     </div>
                   </td>
-                  <td className="p-4 align-middle text-sm font-bold font-mono text-gray-950 dark:text-white">
-                    {sale.status === 'Shipped'
-                      ? `Estimasi: ${formatCurrency(sale.price)}`
-                      : `${sale.finalReceiptAmount === null ? 'Estimasi: ' : 'Final: '}${formatCurrency(getShopeeReceivableAmount(sale))}`}
+                  <td className="px-3 py-2 align-middle text-xs font-bold font-mono text-gray-950 dark:text-white">
+                    {sale.status === 'Cancelled'
+                      ? 'Dibatalkan'
+                      : sale.status === 'Shipped' || sale.status === 'Postponed'
+                        ? `Estimasi: ${formatCurrency(sale.price)}`
+                        : `${sale.finalReceiptAmount === null ? 'Estimasi: ' : 'Final: '}${formatCurrency(getShopeeReceivableAmount(sale))}`}
                   </td>
-                  <td className="p-4 align-middle">
+                  <td className="px-3 py-2 align-middle">
                     <div className="relative inline-block">
-                      <button
-                        type="button"
-                        onClick={() => setOpenStatusMenuId((current) => current === sale.id ? null : sale.id)}
-                        className={`inline-flex items-center gap-1 border px-2 py-1 text-[10px] uppercase font-black tracking-widest ${getStatusBadgeClass(sale.status)}`}
-                      >
-                        {getStatusLabel(sale.status)}
-                        <ChevronDown size={13} />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => setOpenStatusMenuId((current) => current === sale.id ? null : sale.id)}
+                          className={`inline-flex items-center gap-1 border px-2 py-0.5 text-[9px] uppercase font-black tracking-widest ${getStatusBadgeClass(sale.status)}`}
+                        >
+                          {getStatusLabel(sale.status)}
+                          <ChevronDown size={12} />
+                        </button>
 
-                      {openStatusMenuId === sale.id && (
-                        <div className="absolute left-0 top-8 z-30 w-32 border-[0.5px] border-[#333] bg-[#111] py-1 shadow-xl">
-                          {statusOptions.map((status) => (
-                            <button
-                              key={status}
-                              type="button"
-                              onClick={() => handleStatusChange(sale, status)}
-                              className={`block w-full px-3 py-2 text-left text-[10px] font-black uppercase tracking-widest transition-colors hover:bg-[#161616] ${getStatusBadgeClass(status)}`}
-                            >
-                              {getStatusLabel(status)}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                        {openStatusMenuId === sale.id && (
+                          <div className="absolute left-0 top-7 z-50 w-28 border-[0.5px] border-[#333] bg-[#111] py-1 shadow-xl">
+                            {statusOptions.map((status) => (
+                              <button
+                                key={status}
+                                type="button"
+                                onClick={() => handleStatusChange(sale, status)}
+                                className={`block w-full px-2.5 py-1.5 text-left text-[9px] font-black uppercase tracking-widest transition-colors hover:bg-[#161616] ${getStatusBadgeClass(status)}`}
+                              >
+                                {getStatusLabel(status)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                     </div>
                   </td>
-                  <td className="p-4 align-middle text-xs font-semibold text-gray-900 dark:text-[#E0E0E0]">
+                  <td className="px-3 py-2 align-middle text-[11px] font-semibold text-gray-900 dark:text-[#E0E0E0]">
                     {sale.deliveryMethod}
                   </td>
-                  <td className="p-4 align-middle text-xs font-semibold text-gray-900 dark:text-[#E0E0E0]">
+                  <td className="px-3 py-2 align-middle text-[11px] font-semibold text-gray-900 dark:text-[#E0E0E0]">
                     {getPaymentLabel(sale.purchaseMethod)}
                   </td>
-                  <td className="max-w-48 p-4 align-middle text-xs font-medium text-gray-600 dark:text-[#A0A0A0]">
+                  <td className="max-w-44 px-3 py-2 align-middle text-[11px] font-medium text-gray-600 dark:text-[#A0A0A0]">
                     <span className="line-clamp-3" title={sale.note || undefined}>
                       {sale.note || <span>&mdash;</span>}
                     </span>
                   </td>
-                  <td className="p-4 align-middle">
-                    <div className="flex flex-col items-center gap-2">
+                  <td className="px-3 py-2 align-middle">
+                    <div className="flex flex-col items-center gap-1">
                       <button
                         onClick={() => handleOpenInvoiceModal(sale)}
-                        className="flex h-8 w-8 items-center justify-center border border-gray-200 text-gray-500 transition-colors hover:border-[#F27D26] hover:text-[#F27D26] dark:border-[#333] dark:text-[#888] dark:hover:border-[#F27D26] dark:hover:text-[#F27D26]"
+                        className="flex h-7 w-7 items-center justify-center border border-gray-200 text-gray-500 transition-colors hover:border-[#F27D26] hover:text-[#F27D26] dark:border-[#333] dark:text-[#888] dark:hover:border-[#F27D26] dark:hover:text-[#F27D26]"
                         title="Cetak invoice"
                       >
-                        <ReceiptText size={16} />
+                        <ReceiptText size={14} />
                       </button>
                       <button
                         onClick={() => handleOpenEditModal(sale)}
-                        className="flex h-8 w-8 items-center justify-center border border-gray-200 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-800 dark:border-[#333] dark:text-[#888] dark:hover:border-[#555] dark:hover:text-[#E0E0E0]"
+                        className="flex h-7 w-7 items-center justify-center border border-gray-200 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-800 dark:border-[#333] dark:text-[#888] dark:hover:border-[#555] dark:hover:text-[#E0E0E0]"
                         title="Edit data"
                       >
-                        <Edit2 size={16} />
+                        <Edit2 size={14} />
                       </button>
                     </div>
                   </td>
-                </tr>
+                </motion.tr>
                 );
               })}
               {filteredShopeeSales.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="p-8 text-center text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">
+                  <td colSpan={11} className="p-6 text-center text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">
                     {hasActiveFilter ? 'Tidak ada data Shopee yang cocok dengan filter.' : 'Tidak ada data Shopee ditemukan.'}
                   </td>
                 </tr>
@@ -772,6 +1000,35 @@ export const ShopeeSales = () => {
             </tbody>
           </table>
         </div>
+
+        {filteredShopeeSales.length > SHOPEE_SALES_PAGE_SIZE && (
+          <div className="flex flex-col gap-2 border-t border-gray-200 px-3 py-2.5 text-[9px] font-black uppercase tracking-widest text-gray-500 dark:border-[#1E1E1E] dark:text-[#8E9299] sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Menampilkan {firstVisibleIndex + 1}-{Math.min(firstVisibleIndex + SHOPEE_SALES_PAGE_SIZE, filteredShopeeSales.length)} dari {filteredShopeeSales.length} kiriman
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Halaman {currentPage} / {totalPages}</span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+                className="flex h-7 w-7 items-center justify-center border border-gray-300 text-gray-700 transition-colors hover:border-[#F97316] hover:text-[#F97316] disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#333] dark:text-[#A0A0A0] dark:hover:border-[#F97316] dark:hover:text-[#F97316]"
+                title="Halaman sebelumnya"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={currentPage === totalPages}
+                className="flex h-7 w-7 items-center justify-center border border-gray-300 text-gray-700 transition-colors hover:border-[#F97316] hover:text-[#F97316] disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#333] dark:text-[#A0A0A0] dark:hover:border-[#F97316] dark:hover:text-[#F97316]"
+                title="Halaman berikutnya"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <AnimatePresence>
@@ -828,20 +1085,11 @@ export const ShopeeSales = () => {
                   </div>
                   {items.map((item, index) => (
                     <div key={index} className="grid grid-cols-[1fr_96px_32px] gap-2">
-                      <div className="relative">
-                        <select 
-                          required 
-                          className="w-full appearance-none bg-white border border-gray-300 p-2 pr-9 text-sm text-gray-900 focus:outline-none focus:border-[#F27D26] dark:bg-[#1A1C21] dark:border-[#333740] dark:text-white"
-                          value={item.productId}
-                          onChange={e => handleItemChange(index, 'productId', e.target.value)}
-                        >
-                          <option value="" disabled>Pilih produk...</option>
-                          {products.map(p => (
-                            <option key={p.id} value={p.id}>{p.name} (Stok: {p.stock})</option>
-                          ))}
-                        </select>
-                        <ChevronDown size={15} className="pointer-events-none absolute inset-y-0 right-3 my-auto text-gray-500 dark:text-[#8E9299]" />
-                      </div>
+                      <ProductPicker
+                        products={products}
+                        selectedProductId={item.productId}
+                        onSelect={(productId) => handleItemChange(index, 'productId', productId)}
+                      />
                       <input 
                         type="number" 
                         required 
@@ -900,6 +1148,8 @@ export const ShopeeSales = () => {
                       <option value="Shipped">Dikirim</option>
                       <option value="Delivered">Diterima</option>
                       <option value="Returned">Retur</option>
+                      <option value="Postponed">Ditunda</option>
+                      <option value="Cancelled">Dibatal</option>
                     </select>
                     <ChevronDown size={15} className="pointer-events-none absolute inset-y-0 right-3 my-auto text-gray-500 dark:text-[#8E9299]" />
                   </div>
