@@ -39,6 +39,7 @@ export const ShopeeSales = () => {
     price: '',
     deliveryMethod: 'Shopee Xpress' as ShopeeDeliveryMethod,
     purchaseMethod: 'Online Payment' as ShopeePurchaseMethod,
+    note: '',
     status: 'Shipped' as ShopeeOrderStatus,
     date: new Date().toISOString().split('T')[0],
     finalReceiptAmount: null as number | null
@@ -51,6 +52,7 @@ export const ShopeeSales = () => {
     price: '',
     deliveryMethod: 'Shopee Xpress' as ShopeeDeliveryMethod,
     purchaseMethod: 'Online Payment' as ShopeePurchaseMethod,
+    note: '',
     status: 'Shipped' as ShopeeOrderStatus,
     date: new Date().toISOString().split('T')[0],
     finalReceiptAmount: null as number | null
@@ -71,6 +73,7 @@ export const ShopeeSales = () => {
       price: sale.price.toString(),
       deliveryMethod: sale.deliveryMethod,
       purchaseMethod: sale.purchaseMethod,
+      note: sale.note,
       status: sale.status,
       date: sale.date,
       finalReceiptAmount: sale.finalReceiptAmount
@@ -177,6 +180,7 @@ export const ShopeeSales = () => {
         price: Number(formData.price),
         deliveryMethod: formData.deliveryMethod,
         purchaseMethod: formData.purchaseMethod,
+        note: formData.note.trim(),
         status: formData.status,
         date: formData.date,
         finalReceiptAmount: formData.status === 'Delivered' ? formData.finalReceiptAmount : null
@@ -234,6 +238,7 @@ export const ShopeeSales = () => {
   const getPaymentLabel = (method: ShopeePurchaseMethod) => {
     if (method === 'Online Payment') return 'Pembayaran Online';
     if (method === 'COD') return 'COD';
+    if (method === 'Instant') return 'Instant';
     return 'Shopee Pay Later';
   };
 
@@ -434,6 +439,7 @@ export const ShopeeSales = () => {
           statusLabel,
           paymentLabel,
           sale.deliveryMethod,
+          sale.note,
           productNames,
         ].some((value) => value.toLowerCase().includes(normalizedSearch));
       })
@@ -602,6 +608,7 @@ export const ShopeeSales = () => {
                   <option value="Online Payment">Pembayaran Online</option>
                   <option value="COD">COD</option>
                   <option value="Shopee Pay Later">Shopee Pay Later</option>
+                  <option value="Instant">Instant</option>
                 </select>
                 <ChevronDown size={15} className="pointer-events-none absolute inset-y-0 right-3 my-auto text-gray-500 dark:text-[#A0A0A0]" />
               </div>
@@ -649,6 +656,7 @@ export const ShopeeSales = () => {
                 <th className="p-4">Status</th>
                 <th className="p-4">Metode Pengiriman</th>
                 <th className="p-4">Jenis Pembayaran</th>
+                <th className="p-4">Catatan</th>
                 <th className="p-4 text-center">Aksi</th>
               </tr>
             </thead>
@@ -728,6 +736,11 @@ export const ShopeeSales = () => {
                   <td className="p-4 align-middle text-xs font-semibold text-gray-900 dark:text-[#E0E0E0]">
                     {getPaymentLabel(sale.purchaseMethod)}
                   </td>
+                  <td className="max-w-48 p-4 align-middle text-xs font-medium text-gray-600 dark:text-[#A0A0A0]">
+                    <span className="line-clamp-3" title={sale.note || undefined}>
+                      {sale.note || <span>&mdash;</span>}
+                    </span>
+                  </td>
                   <td className="p-4 align-middle">
                     <div className="flex flex-col items-center gap-2">
                       <button
@@ -751,7 +764,7 @@ export const ShopeeSales = () => {
               })}
               {filteredShopeeSales.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">
+                  <td colSpan={11} className="p-8 text-center text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-[#8E9299]">
                     {hasActiveFilter ? 'Tidak ada data Shopee yang cocok dengan filter.' : 'Tidak ada data Shopee ditemukan.'}
                   </td>
                 </tr>
@@ -768,7 +781,7 @@ export const ShopeeSales = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-stone-50 border border-gray-200 w-full max-w-lg overflow-hidden text-gray-900 shadow-xl dark:bg-[#151619] dark:border-[#2A2D35] dark:text-[#E0E2E6]"
+              className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden border border-gray-200 bg-stone-50 text-gray-900 shadow-xl dark:border-[#2A2D35] dark:bg-[#151619] dark:text-[#E0E2E6]"
             >
               <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center dark:border-[#2A2D35]">
                 <h3 className="text-sm font-bold uppercase italic">{editingSaleId ? 'Edit Data Shopee' : 'Input Shopee Baru'}</h3>
@@ -777,7 +790,7 @@ export const ShopeeSales = () => {
                 </button>
               </div>
               
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto p-6">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block tracking-widest dark:text-[#8E9299]">ID Pesanan <span className="text-[#F27D26]">*</span></label>
@@ -922,9 +935,21 @@ export const ShopeeSales = () => {
                       <option value="Online Payment">Pembayaran Online</option>
                       <option value="COD">Bayar di Tempat (COD)</option>
                       <option value="Shopee Pay Later">Shopee Pay Later</option>
+                      <option value="Instant">Instant</option>
                     </select>
                     <ChevronDown size={15} className="pointer-events-none absolute inset-y-0 right-3 my-auto text-gray-500 dark:text-[#8E9299]" />
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block tracking-widest dark:text-[#8E9299]">Note</label>
+                  <textarea
+                    className="w-full bg-white border border-gray-300 p-2 text-sm text-gray-900 focus:outline-none focus:border-[#F27D26] dark:bg-[#1A1C21] dark:border-[#333740] dark:text-white"
+                    value={formData.note}
+                    onChange={e => setFormData({...formData, note: e.target.value})}
+                    placeholder="Catatan tambahan untuk pengiriman Shopee"
+                    rows={3}
+                  />
                 </div>
 
                 <div className="pt-4 flex justify-end gap-3">

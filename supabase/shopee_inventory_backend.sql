@@ -97,6 +97,9 @@ check (delivery_method in ('Shopee Xpress', 'J&T Express', 'JNE', 'SiCepat', 'An
 alter table shopee_orders
 add column if not exists delivery_id text not null default '';
 
+alter table shopee_orders
+add column if not exists note text;
+
 create table if not exists shopee_return_cases (
   id uuid primary key default gen_random_uuid(),
   shopee_order_id uuid not null unique references shopee_orders(id) on delete cascade,
@@ -189,6 +192,7 @@ drop function if exists create_shopee_order(text, date, text, text, integer, jso
 drop function if exists create_shopee_order(text, date, text, text, text, integer, jsonb);
 drop function if exists create_shopee_order(text, text, date, text, text, text, integer, jsonb);
 drop function if exists create_shopee_order(text, text, date, text, text, text, integer, jsonb, integer);
+drop function if exists create_shopee_order(text, text, date, text, text, text, integer, jsonb, integer, text);
 
 create or replace function create_shopee_order(
   p_order_id text,
@@ -199,7 +203,8 @@ create or replace function create_shopee_order(
   p_delivery_method text,
   p_estimated_receipt_amount integer,
   p_items jsonb,
-  p_final_receipt_amount integer default null
+  p_final_receipt_amount integer default null,
+  p_note text default null
 )
 returns uuid
 language plpgsql
@@ -214,7 +219,7 @@ begin
     raise exception 'Invalid Shopee order status: %', p_status;
   end if;
 
-  if p_payment_method not in ('Online Payment', 'COD', 'Shopee Pay Later') then
+  if p_payment_method not in ('Online Payment', 'COD', 'Shopee Pay Later', 'Instant') then
     raise exception 'Invalid Shopee payment method: %', p_payment_method;
   end if;
 
@@ -243,6 +248,7 @@ begin
     delivery_method,
     estimated_receipt_amount,
     final_receipt_amount,
+    note,
     created_by
   )
   values (
@@ -254,6 +260,7 @@ begin
     p_delivery_method,
     p_estimated_receipt_amount,
     case when p_status = 'Delivered' then p_final_receipt_amount else null end,
+    nullif(trim(coalesce(p_note, '')), ''),
     auth.uid()
   )
   returning id into v_order_uuid;
@@ -494,6 +501,7 @@ $$;
 
 drop function if exists update_shopee_order(uuid, text, text, date, text, text, text, integer, jsonb);
 drop function if exists update_shopee_order(uuid, text, text, date, text, text, text, integer, jsonb, integer);
+drop function if exists update_shopee_order(uuid, text, text, date, text, text, text, integer, jsonb, integer, text);
 
 create or replace function update_shopee_order(
   p_shopee_order_id uuid,
@@ -505,7 +513,8 @@ create or replace function update_shopee_order(
   p_delivery_method text,
   p_estimated_receipt_amount integer,
   p_items jsonb,
-  p_final_receipt_amount integer default null
+  p_final_receipt_amount integer default null,
+  p_note text default null
 )
 returns void
 language plpgsql
@@ -522,7 +531,7 @@ begin
     raise exception 'Invalid Shopee order status: %', p_status;
   end if;
 
-  if p_payment_method not in ('Online Payment', 'COD', 'Shopee Pay Later') then
+  if p_payment_method not in ('Online Payment', 'COD', 'Shopee Pay Later', 'Instant') then
     raise exception 'Invalid Shopee payment method: %', p_payment_method;
   end if;
 
@@ -689,6 +698,7 @@ begin
       delivery_method = p_delivery_method,
       estimated_receipt_amount = p_estimated_receipt_amount,
       final_receipt_amount = case when p_status = 'Delivered' then p_final_receipt_amount else null end,
+      note = nullif(trim(coalesce(p_note, '')), ''),
       updated_at = now()
   where id = p_shopee_order_id;
 
