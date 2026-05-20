@@ -28,6 +28,7 @@ export const ShopeeReturns = () => {
   const getPaymentLabel = (method: ShopeeReturnCase['order']['purchaseMethod']) => {
     if (method === 'Online Payment') return 'Pembayaran Online';
     if (method === 'COD') return 'COD';
+    if (method === 'Instant') return 'Instant';
     return 'Shopee Pay Later';
   };
 

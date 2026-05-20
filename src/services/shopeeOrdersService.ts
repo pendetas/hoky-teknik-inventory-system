@@ -26,6 +26,7 @@ type ShopeeOrderRow = {
   estimated_receipt_amount: number;
   final_receipt_amount: number | null;
   receivable_amount: number;
+  note: string | null;
   created_at: string;
   shopee_order_items?: ShopeeOrderItemRow[];
 };
@@ -59,7 +60,7 @@ const assertShopeeStatus = (status: string): ShopeeOrderStatus => {
 };
 
 const assertPaymentMethod = (method: string): ShopeePurchaseMethod => {
-  if (method === 'Online Payment' || method === 'COD' || method === 'Shopee Pay Later') {
+  if (method === 'Online Payment' || method === 'COD' || method === 'Shopee Pay Later' || method === 'Instant') {
     return method;
   }
 
@@ -108,6 +109,7 @@ const toShopeeSale = (row: ShopeeOrderRow): ShopeeSale => ({
   receivableAmount: row.receivable_amount,
   deliveryMethod: assertDeliveryMethod(row.delivery_method || 'Shopee Xpress'),
   purchaseMethod: assertPaymentMethod(row.payment_method),
+  note: row.note || '',
   status: assertShopeeStatus(row.status),
   date: row.order_date,
   createdAt: row.created_at,
@@ -139,6 +141,7 @@ export const shopeeOrdersService = {
         estimated_receipt_amount,
         final_receipt_amount,
         receivable_amount,
+        note,
         created_at,
         shopee_order_items (
           id,
@@ -166,6 +169,7 @@ export const shopeeOrdersService = {
       p_delivery_method: order.deliveryMethod,
       p_estimated_receipt_amount: order.price,
       p_final_receipt_amount: order.finalReceiptAmount,
+      p_note: order.note,
       p_items: order.items.map((item) => ({
         product_id: item.productId,
         quantity: item.quantity,
@@ -203,6 +207,7 @@ export const shopeeOrdersService = {
       p_delivery_method: order.deliveryMethod,
       p_estimated_receipt_amount: order.price,
       p_final_receipt_amount: order.finalReceiptAmount,
+      p_note: order.note,
       p_items: order.items.map((item) => ({
         product_id: item.productId,
         quantity: item.quantity,
@@ -236,6 +241,7 @@ export const shopeeOrdersService = {
           estimated_receipt_amount,
           final_receipt_amount,
           receivable_amount,
+          note,
           created_at,
           shopee_order_items (
             id,

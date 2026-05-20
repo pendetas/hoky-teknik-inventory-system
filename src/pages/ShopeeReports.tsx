@@ -132,7 +132,7 @@ export const ShopeeReports = () => {
     ];
 
     const shipmentData = [
-      ['ID Pesanan', 'No. Resi', 'Tanggal', 'Status', 'Metode Pengiriman', 'Metode Pembayaran', 'Produk', 'Total Qty', 'Estimasi Penerimaan', 'Penerimaan Final', 'Omset Diakui'],
+      ['ID Pesanan', 'No. Resi', 'Tanggal', 'Status', 'Metode Pengiriman', 'Metode Pembayaran', 'Catatan', 'Produk', 'Total Qty', 'Estimasi Penerimaan', 'Penerimaan Final', 'Omset Diakui'],
       ...filteredShipments.map((sale) => [
         sale.orderId || '-',
         sale.deliveryId || '-',
@@ -140,6 +140,7 @@ export const ShopeeReports = () => {
         getStatusLabel(sale.status),
         sale.deliveryMethod,
         sale.purchaseMethod,
+        sale.note || '-',
         getOrderProducts(sale.items),
         getOrderQty(sale.items),
         sale.price,
