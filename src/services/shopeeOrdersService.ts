@@ -76,6 +76,7 @@ const assertPaymentMethod = (method: string): ShopeePurchaseMethod => {
 const assertDeliveryMethod = (method: string): ShopeeDeliveryMethod => {
   if (
     method === 'Shopee Xpress' ||
+    method === 'Shopee Xpress Instant' ||
     method === 'J&T Express' ||
     method === 'JNE' ||
     method === 'SiCepat' ||
