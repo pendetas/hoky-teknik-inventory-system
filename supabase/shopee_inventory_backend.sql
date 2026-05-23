@@ -92,13 +92,47 @@ generated always as (
 
 alter table shopee_orders
 add column if not exists delivery_method text not null default 'Shopee Xpress'
-check (delivery_method in ('Shopee Xpress', 'J&T Express', 'JNE', 'SiCepat', 'Anteraja', 'Lainnya'));
+check (delivery_method in ('Shopee Xpress', 'Shopee Xpress Instant', 'J&T Express', 'JNE', 'SiCepat', 'Anteraja', 'Lainnya'));
 
 alter table shopee_orders
 add column if not exists delivery_id text not null default '';
 
 alter table shopee_orders
 add column if not exists note text;
+
+alter table shopee_orders
+drop constraint if exists shopee_orders_status_check;
+
+alter table shopee_orders
+add constraint shopee_orders_status_check
+check (status in ('Shipped', 'Delivered', 'Returned', 'Postponed', 'Cancelled'));
+
+alter table shopee_orders
+drop constraint if exists shopee_orders_delivery_method_check;
+
+alter table shopee_orders
+add constraint shopee_orders_delivery_method_check
+check (delivery_method in ('Shopee Xpress', 'Shopee Xpress Instant', 'J&T Express', 'JNE', 'SiCepat', 'Anteraja', 'Lainnya'));
+
+alter table shopee_orders
+drop constraint if exists shopee_orders_order_id_not_blank;
+
+alter table shopee_orders
+add constraint shopee_orders_order_id_not_blank
+check (trim(order_id) <> '');
+
+alter table shopee_orders
+drop constraint if exists shopee_orders_delivery_id_not_blank;
+
+alter table shopee_orders
+add constraint shopee_orders_delivery_id_not_blank
+check (trim(delivery_id) <> '');
+
+create unique index if not exists shopee_orders_order_id_unique
+on shopee_orders (lower(trim(order_id)));
+
+create unique index if not exists shopee_orders_delivery_id_unique
+on shopee_orders (lower(trim(delivery_id)));
 
 create table if not exists shopee_return_cases (
   id uuid primary key default gen_random_uuid(),
@@ -223,8 +257,32 @@ begin
     raise exception 'Invalid Shopee payment method: %', p_payment_method;
   end if;
 
-  if p_delivery_method not in ('Shopee Xpress', 'J&T Express', 'JNE', 'SiCepat', 'Anteraja', 'Lainnya') then
+  if p_delivery_method not in ('Shopee Xpress', 'Shopee Xpress Instant', 'J&T Express', 'JNE', 'SiCepat', 'Anteraja', 'Lainnya') then
     raise exception 'Invalid Shopee delivery method: %', p_delivery_method;
+  end if;
+
+  if trim(coalesce(p_order_id, '')) = '' then
+    raise exception 'Shopee order ID is required';
+  end if;
+
+  if trim(coalesce(p_delivery_id, '')) = '' then
+    raise exception 'Shopee tracking number is required';
+  end if;
+
+  if exists (
+    select 1
+    from shopee_orders
+    where lower(trim(order_id)) = lower(trim(p_order_id))
+  ) then
+    raise exception 'Shopee order ID already exists: %', trim(p_order_id);
+  end if;
+
+  if exists (
+    select 1
+    from shopee_orders
+    where lower(trim(delivery_id)) = lower(trim(p_delivery_id))
+  ) then
+    raise exception 'Shopee tracking number already exists: %', trim(p_delivery_id);
   end if;
 
   if p_estimated_receipt_amount < 0 then
@@ -535,8 +593,34 @@ begin
     raise exception 'Invalid Shopee payment method: %', p_payment_method;
   end if;
 
-  if p_delivery_method not in ('Shopee Xpress', 'J&T Express', 'JNE', 'SiCepat', 'Anteraja', 'Lainnya') then
+  if p_delivery_method not in ('Shopee Xpress', 'Shopee Xpress Instant', 'J&T Express', 'JNE', 'SiCepat', 'Anteraja', 'Lainnya') then
     raise exception 'Invalid Shopee delivery method: %', p_delivery_method;
+  end if;
+
+  if trim(coalesce(p_order_id, '')) = '' then
+    raise exception 'Shopee order ID is required';
+  end if;
+
+  if trim(coalesce(p_delivery_id, '')) = '' then
+    raise exception 'Shopee tracking number is required';
+  end if;
+
+  if exists (
+    select 1
+    from shopee_orders
+    where id <> p_shopee_order_id
+      and lower(trim(order_id)) = lower(trim(p_order_id))
+  ) then
+    raise exception 'Shopee order ID already exists: %', trim(p_order_id);
+  end if;
+
+  if exists (
+    select 1
+    from shopee_orders
+    where id <> p_shopee_order_id
+      and lower(trim(delivery_id)) = lower(trim(p_delivery_id))
+  ) then
+    raise exception 'Shopee tracking number already exists: %', trim(p_delivery_id);
   end if;
 
   if p_estimated_receipt_amount < 0 then

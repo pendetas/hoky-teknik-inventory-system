@@ -11,7 +11,7 @@ export type Product = {
 
 export type ShopeePurchaseMethod = 'Online Payment' | 'COD' | 'Shopee Pay Later' | 'Instant';
 export type ShopeeOrderStatus = 'Shipped' | 'Delivered' | 'Returned' | 'Postponed' | 'Cancelled';
-export type ShopeeDeliveryMethod = 'Shopee Xpress' | 'J&T Express' | 'JNE' | 'SiCepat' | 'Anteraja' | 'Lainnya';
+export type ShopeeDeliveryMethod = 'Shopee Xpress' | 'Shopee Xpress Instant' | 'J&T Express' | 'JNE' | 'SiCepat' | 'Anteraja' | 'Lainnya';
 export type ShopeeReturnStatus =
   | 'Barang Bagus'
   | 'Barang Rusak - Menunggu Shopee'
